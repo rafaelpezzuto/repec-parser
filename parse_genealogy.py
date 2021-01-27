@@ -3,8 +3,12 @@ import os
 import re
 import sys
 
+from bs4 import NavigableString
 
 REGEX_YEAR = r'\d{4}'
+REGEX_STUDENT_NAME = r'\d{4}(.*)\('
+REGEX_CODE = r'\/(\w*)\.html'
+
 ARTIFICIAL_NODES_COUNTER = 1
 
 
@@ -13,7 +17,7 @@ def save(data, path):
         if 'nodes' in path:
             f.write('Id\tLabel\n')
         elif 'edges' in path:
-            f.write('Source\tTarget\tYear\tInstitution\n')
+            f.write('Source\tTarget\tYear\tInstitution\tExtractedFrom\n')
 
         for d in data:
             f.write(d + '\n')
@@ -24,10 +28,10 @@ def get_cleaned_nodes_edges(raw):
     edges = []
 
     for k, v in raw.items():
-        student_code = k
-        student_name = v.get('name', '')
+        profile_researcher_code = k
+        profile_researcher_name = v.get('name', '')
 
-        nodes.append('\t'.join([student_code, student_name]))
+        nodes.append('\t'.join([profile_researcher_code, profile_researcher_name]))
 
         for vi in v.get('advisors', []):
             advisor_code = vi
@@ -35,15 +39,23 @@ def get_cleaned_nodes_edges(raw):
                 formation_institution = v.get('graduate_info')[0][0]
                 formation_year = v.get('graduate_info')[0][-1]
 
-                edges.append('\t'.join([advisor_code, student_code, formation_year, formation_institution]))
+                edges.append('\t'.join([advisor_code, profile_researcher_code, formation_year, formation_institution, 'padv']))
+
+        for vi in v.get('students', []):
+            stu_code, stu_name, stu_year, stu_institution = vi
+            edges.append('\t'.join([profile_researcher_code, stu_code, stu_year, stu_institution, 'pstu']))
 
     return nodes, edges
 
 
-def generate_artificial_code():
+def generate_artificial_code(mode: str):
     global ARTIFICIAL_NODES_COUNTER
 
-    artcode = 'art' + str(ARTIFICIAL_NODES_COUNTER)
+    if mode == 'advisor':
+        artcode = 'adv' + str(ARTIFICIAL_NODES_COUNTER)
+    elif mode == 'student':
+        artcode = 'stu' + str(ARTIFICIAL_NODES_COUNTER)
+
     ARTIFICIAL_NODES_COUNTER += 1
 
     return artcode
@@ -72,24 +84,74 @@ def _extract_graduate_info(raw):
 
 def _extract_students(raw):
     stus = []
-    return stus
+
+    for c in raw.children:
+        stu_institution = _find_institution(c.next)
+        for li in c.find_all('li'):
+            stu_year, stu_name, stu_code = _find_student_data(li)
+
+            if stu_code == '-1':
+                stu_code = generate_artificial_code('student')
+
+            stus.append((stu_code, stu_name, stu_year, stu_institution))
+
+        return stus
+
+
+def _find_author_code(li):
+    code = '-1'
+
+    li_a = li.find('a')
+    if li_a:
+        li_a_href = li_a.get('href')
+        if li_a_href:
+            code = _extract_author_code(li_a_href, 'url')
+
+    return code
+
+
+def _find_student_data(li):
+    year = ''
+    name = ''
+    code = ''
+
+    if isinstance(li.next, str):
+        matched_year = re.search(REGEX_YEAR, li.next)
+        if matched_year:
+            year = matched_year.group()
+
+        matched_name = re.search(REGEX_STUDENT_NAME, li.next)
+        if matched_name:
+            name = matched_name.groups()[0].replace('  ', ' ').strip()
+
+        li_a = li.find('a')
+        if li_a:
+            li_a_href = li_a.get('href')
+            if li_a_href:
+                matched_code = re.search(REGEX_CODE, li.find('a').get('href'))
+                if matched_code:
+                    code = matched_code.groups()[0].strip()
+
+    return year, name, code
+
+
+def _find_institution(tag):
+    inst = ''
+
+    if isinstance(tag, bs4.element.Tag):
+        if tag.name == 'a':
+            if 'data' in tag.get('href', ''):
+                inst = tag.text
+    return inst
 
 
 def _extract_advisors(raw):
     advs = []
 
     for li in raw.find_all('li'):
-        adv_code = '-1'
-
-        li_a = li.find('a')
-        if li_a:
-            li_a_href = li_a.get('href')
-            if li_a_href:
-                adv_code = _extract_author_code(li_a_href, 'url')
-
+        adv_code = _find_author_code(li)
         if adv_code == '-1':
-            adv_code = generate_artificial_code()
-
+            adv_code = generate_artificial_code('advisor')
         advs.append(adv_code)
 
     return advs
@@ -123,7 +185,7 @@ def parse(path):
 
             for rel in related:
                 if rel.text == 'Graduate studies':
-                    graduate_graduate_info = _extract_graduate_info(rel.find_next())
+                    graduate_info = _extract_graduate_info(rel.find_next())
                 elif rel.text == 'Advisor':
                     advisors = _extract_advisors(rel.find_next())
                 elif rel.text == 'Students':
@@ -131,7 +193,7 @@ def parse(path):
 
             raw_graph[author_code] = {'name': author_name,
                                       'advisors': advisors,
-                                      'graduate_info': graduate_graduate_info,
+                                      'graduate_info': graduate_info,
                                       'students': students}
     print('Done')
     return raw_graph
