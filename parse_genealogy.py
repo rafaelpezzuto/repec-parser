@@ -11,7 +11,7 @@ ARTIFICIAL_NODES_COUNTER = 1
 def save(data, path):
     with open(path, 'w') as f:
         if 'nodes' in path:
-            f.write('Id\tName\n')
+            f.write('Id\tLabel\n')
         elif 'edges' in path:
             f.write('Source\tTarget\tYear\tInstitution\n')
 
