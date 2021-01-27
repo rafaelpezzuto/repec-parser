@@ -24,18 +24,18 @@ def get_cleaned_nodes_edges(raw):
     edges = []
 
     for k, v in raw.items():
-        source_code = k
-        source_name = v.get('name', '')
+        student_code = k
+        student_name = v.get('name', '')
 
-        nodes.append('\t'.join([source_code, source_name]))
+        nodes.append('\t'.join([student_code, student_name]))
 
         for vi in v.get('advisors', []):
-            target_code = vi
+            advisor_code = vi
             if len(v.get('graduate_info', [])) > 0:
-                target_institution = v.get('graduate_info')[0][0]
-                target_year = v.get('graduate_info')[0][-1]
+                formation_institution = v.get('graduate_info')[0][0]
+                formation_year = v.get('graduate_info')[0][-1]
 
-                edges.append('\t'.join([source_code, target_code, target_year, target_institution]))
+                edges.append('\t'.join([advisor_code, student_code, formation_year, formation_institution]))
 
     return nodes, edges
 
