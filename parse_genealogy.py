@@ -5,6 +5,7 @@ import sys
 
 
 REGEX_YEAR = r'\d{4}'
+ARTIFICIAL_NODES_COUNTER = 1
 
 
 def save(data, path):
@@ -37,6 +38,15 @@ def get_cleaned_nodes_edges(raw):
                 edges.append('\t'.join([source_code, target_code, target_year, target_institution]))
 
     return nodes, edges
+
+
+def generate_artificial_code():
+    global ARTIFICIAL_NODES_COUNTER
+
+    artcode = 'art' + str(ARTIFICIAL_NODES_COUNTER)
+    ARTIFICIAL_NODES_COUNTER += 1
+
+    return artcode
 
 
 def _extract_graduate_info(raw):
@@ -76,6 +86,9 @@ def _extract_advisors(raw):
             li_a_href = li_a.get('href')
             if li_a_href:
                 adv_code = _extract_author_code(li_a_href, 'url')
+
+        if adv_code == '-1':
+            adv_code = generate_artificial_code()
 
         advs.append(adv_code)
 
