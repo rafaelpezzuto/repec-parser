@@ -34,7 +34,7 @@ def get_cleaned_nodes_edges(raw):
                 target_institution = v.get('graduate_info')[0][0]
                 target_year = v.get('graduate_info')[0][-1]
 
-                edges.append('|'.join([source_code, target_code, target_year, target_institution]))
+                edges.append('\t'.join([source_code, target_code, target_year, target_institution]))
 
     return nodes, edges
 
@@ -127,5 +127,5 @@ def parse(path):
 if __name__ == '__main__':
     raw_graph = parse(sys.argv[1])
     nodes, edges = get_cleaned_nodes_edges(raw_graph)
-    save(nodes, 'genealogy_nodes.csv')
-    save(edges, 'genealogy_edges.csv')
+    save(nodes, 'nodes.tsv')
+    save(edges, 'edges.tsv')
