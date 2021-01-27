@@ -9,6 +9,11 @@ REGEX_YEAR = r'\d{4}'
 
 def save(data, path):
     with open(path, 'w') as f:
+        if 'nodes' in path:
+            f.write('Id\tName\n')
+        elif 'edges' in path:
+            f.write('Source\tTarget\tYear\tInstitution\n')
+
         for d in data:
             f.write(d + '\n')
 
@@ -21,7 +26,7 @@ def get_cleaned_nodes_edges(raw):
         source_code = k
         source_name = v.get('name', '')
 
-        nodes.append('|'.join([source_code, source_name]))
+        nodes.append('\t'.join([source_code, source_name]))
 
         for vi in v.get('advisors', []):
             target_code = vi
