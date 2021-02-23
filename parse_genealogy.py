@@ -3,7 +3,6 @@ import os
 import re
 import sys
 
-from bs4 import NavigableString
 
 REGEX_YEAR = r'\d{4}'
 REGEX_STUDENT_NAME = r'\d{4}(.*)\('
@@ -17,7 +16,7 @@ def save(data, path):
         if 'nodes' in path:
             f.write('Id\tLabel\n')
         elif 'edges' in path:
-            f.write('Source\tTarget\tYear\tInstitution\tExtractedFrom\n')
+            f.write('Source\tTarget\tYear\tInstitution\n')
 
         for d in data:
             f.write(d + '\n')
@@ -44,6 +43,9 @@ def get_cleaned_nodes_edges(raw):
         for vi in v.get('students', []):
             stu_code, stu_name, stu_year, stu_institution = vi
             edges.append('\t'.join([profile_researcher_code, stu_code, stu_year, stu_institution, 'pstu']))
+
+    print('cleaning and deduplicating edges...')
+    edges = deduplicate_edges(edges)
 
     return nodes, edges
 
@@ -168,6 +170,35 @@ def _extract_author_code(raw, mode='default'):
         return _extract_author_code(raw.split('/')[-1])
 
 
+def deduplicate_edges(edges: list):
+    edges_keys = {}
+
+    for e in edges:
+        els = e.split('\t')
+        source = els[0]
+        target = els[1]
+        year = els[2]
+        institution = els[3]
+
+        if source and target and year:
+            edge_key = '-'.join(sorted([source, target]))
+
+            if edge_key not in edges_keys:
+                edges_keys[edge_key] = set()
+
+            edges_keys[edge_key].add('\t'.join([source, target, year, institution]))
+
+    ddp_edges = []
+    for k, v in edges_keys.items():
+        if len(v) > 2:
+            print('\n'.join(v))
+
+        for vi in v:
+            ddp_edges.append(vi)
+
+    return sorted(ddp_edges)
+
+
 def parse(path):
     raw_graph = {}
 
@@ -175,7 +206,7 @@ def parse(path):
     total = len(files)
     for ind, fi in enumerate(files):
         print('\rParsing %d of %d... ' % (ind, total), end='')
-        with open(os.path.join(path, fi)) as fr:
+        with open(os.path.join(path, fi), encoding='utf-8') as fr:
             fr_soup = bs4.BeautifulSoup(fr, 'html.parser')
 
             author_name = _extract_author_name(fr_soup.find('h1').text)
