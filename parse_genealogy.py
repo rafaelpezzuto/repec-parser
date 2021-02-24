@@ -1,7 +1,9 @@
+import argparse
 import bs4
 import os
 import re
-import sys
+
+from utils import save
 
 
 REGEX_YEAR = r'\d{4}'
@@ -9,17 +11,6 @@ REGEX_STUDENT_NAME = r'\d{4}(.*)\('
 REGEX_CODE = r'\/(\w*)\.html'
 
 ARTIFICIAL_NODES_COUNTER = 1
-
-
-def save(data, path):
-    with open(path, 'w') as f:
-        if 'nodes' in path:
-            f.write('Id\tLabel\n')
-        elif 'edges' in path:
-            f.write('Source\tTarget\tYear\tInstitution\n')
-
-        for d in data:
-            f.write(d + '\n')
 
 
 def get_cleaned_nodes_edges(raw):
@@ -199,7 +190,7 @@ def deduplicate_edges(edges: list):
     return sorted(ddp_edges)
 
 
-def parse(path):
+def parse_files(path):
     raw_graph = {}
 
     files = sorted(os.listdir(path))
@@ -230,8 +221,27 @@ def parse(path):
     return raw_graph
 
 
-if __name__ == '__main__':
-    raw_graph = parse(sys.argv[1])
-    nodes, edges = get_cleaned_nodes_edges(raw_graph)
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        '-d',
+        dest='dir_genealogy',
+        help='Diretório com páginas de genealogia'
+    )
+
+    params = parser.parse_args()
+
+    if not os.path.isdir(params):
+        print('Diretório %s não existe' % params.dir_genealogy)
+        exit(1)
+
+    initial_graph = parse_files(params.dir_genealogy)
+    nodes, edges = get_cleaned_nodes_edges(initial_graph)
     save(nodes, 'nodes.tsv')
     save(edges, 'edges.tsv')
+
+
+if __name__ == '__main__':
+    main()
+
