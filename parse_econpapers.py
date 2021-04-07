@@ -6,6 +6,8 @@ import re
 
 REGEX_TOTAL_CITATIONS = r'.*View citations \((.*)\)'
 REGEX_CITING_DOCS_URL = r'.*scripts/showcites.pf\?h=(.*)'
+REGEX_CITING_DOC_YEAR = r'(\d{4})|$'
+CITING_DOCS = {}
 
 
 def _extract_author_code(path_file):
@@ -80,7 +82,7 @@ def _extract_article_data(li):
     journal = _extract_article_journal(li)
     citations = _extract_article_citations_info(li)
 
-    return (code, title, journal, citations)
+    return (code, title, journal) + citations
 
 
 def _extract_article_code(li):
@@ -106,8 +108,8 @@ def _extract_article_journal(li):
 
 def _extract_article_citations_info(li):
     total_citations = _extract_total_citations(li)
-    citing_documents_info = ''
-    return (total_citations, citing_documents_info)
+    citing_documents_info = _extract_citing_documents_info(li)
+    return (total_citations, '#'.join(citing_documents_info))
 
 
 def _extract_total_citations(li):
@@ -121,7 +123,45 @@ def _extract_total_citations(li):
 
 
 def _extract_citing_documents_info(li):
-    # ToDo: parse page to obtain the citing documents' years
+    citing_documents_data = []
+
+    a = li.find('a')
+    if a:
+        cd_code = a.get('name')
+
+        if cd_code:
+            cd_path = CITING_DOCS.get(cd_code, '')
+
+            if cd_path:
+                citing_documents_data.extend(_parse_citing_doc(cd_path))
+
+    return citing_documents_data
+
+
+def _parse_citing_doc(path_file):
+    cd_years = []
+
+    with open(path_file) as f:
+        soup = bs4.BeautifulSoup(f, 'html.parser')
+
+        for cd in soup.find_all('li'):
+            cdy = _find_citing_document_year(cd)
+            cd_years.append(cdy)
+
+    return cd_years
+
+
+def _find_citing_document_year(citing_document_li):
+    cdli_fixed = citing_document_li.text.replace('\n', '').strip()
+    while '  ' in cdli_fixed:
+        cdli_fixed = cdli_fixed.replace('  ', ' ')
+
+    match_year = re.search(REGEX_CITING_DOC_YEAR, cdli_fixed)
+    if match_year:
+        if match_year.group(1):
+            if match_year.group(1).isdigit():
+                return match_year.group(1)
+
     return ''
 
 
@@ -146,9 +186,8 @@ def save(data):
             a_code, a_name, ajps = d
             for year, arts in ajps.items():
                 for art in arts:
-                    code, title, journal, citations = art
-                    total_citations, citing_docs_info = citations
-                    line = '|'.join(str(x).strip() for x in [a_code, a_name, year, code, title, journal, total_citations])
+                    code, title, journal, citations_total, citations_years = art
+                    line = '|'.join(str(x).strip() for x in [a_code, a_name, year, code, title, journal, citations_total, citations_years])
                     f.write(line + '\n')
 
 
@@ -157,21 +196,29 @@ def main():
     parser.add_argument(
         '-d',
         required=True,
-        dest='dir_econpapers'
+        dest='dir_raw'
     )
+
     params = parser.parse_args()
 
-    if not os.path.exists(params.dir_econpapers):
-        print('Caminho %s não existe' % params.dir_econpapers)
+    dir_econpapers = os.path.join(params.dir_raw, 'econpapers')
+    dir_citing_docs = os.path.join(params.dir_raw, 'citing_docs')
+
+    if not os.path.exists(dir_econpapers):
+        print('Caminho %s não existe' % dir_econpapers)
         exit(1)
 
-    files = [os.path.join(params.dir_econpapers, f) for f in os.listdir(params.dir_econpapers)]
+    files_econpapers = [os.path.join(dir_econpapers, f) for f in os.listdir(dir_econpapers)]
+
+    global CITING_DOCS
+    for f in os.listdir(dir_citing_docs):
+        CITING_DOCS[f.replace('_', '/').replace('.html', '')] = os.path.join(dir_citing_docs, f)
 
     econpapers = []
-    total_files = len(files)
-    for index, f in enumerate(files):
-        if ((index + 1) % 100) == 0:
-            print('%d of %d' % (index + 1, total_files))
+    total_files = len(files_econpapers)
+    for index, f in enumerate(files_econpapers):
+        print('Status: %d of %d\tParsing: %s' % (index + 1, total_files, f))
+
         pf = parse_file(f)
         if pf:
             econpapers.extend(pf)
